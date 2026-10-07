@@ -55,6 +55,10 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     fetchHealthAndSignal();
+    const timer = setInterval(() => {
+      fetchHealthAndSignal();
+    }, 2500);
+    return () => clearInterval(timer);
   }, []);
 
   if (!mounted) {
@@ -67,9 +71,11 @@ export default function Home() {
     );
   }
 
+  const isLive = !error && health?.status === "healthy";
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100" suppressHydrationWarning>
-      <Header isLive={false} marketStatus="OPEN" />
+      <Header isLive={isLive} marketStatus="OPEN" />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Banner Notice */}

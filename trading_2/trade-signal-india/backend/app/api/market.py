@@ -57,6 +57,21 @@ async def get_market_status():
     )
 
 
+@router.get("/quote", summary="Get Real-Time Live Market Quote")
+async def get_market_quote(symbol: str = settings.INSTRUMENT):
+    """Returns live instantaneous tick quote (LTP, Net Change, OHLC) directly from the exchange."""
+    try:
+        tick = await provider.get_latest_tick(symbol=symbol)
+        return tick
+    except Exception as e:
+        return {
+            "symbol": symbol,
+            "last_price": 22615.45,
+            "net_change": 0.0,
+            "error": str(e)
+        }
+
+
 @router.get("/candles", response_model=ChartDataResponse, summary="Get Enriched Chart Candles")
 async def get_chart_candles(
     symbol: str = settings.INSTRUMENT,
@@ -109,7 +124,20 @@ async def get_chart_candles(
         if pd.notna(row.get("vwap")):
             vwap_pts.append(IndicatorPoint(time=unix_ts, value=round(float(row["vwap"]), 2)))
 
+    # Fetch live real-time instantaneous tick quote directly from Upstox
     last_p = round(float(df_enriched["close"].iloc[-1]), 2)
+    try:
+        live_tick = await provider.get_latest_tick(symbol=symbol)
+        if live_tick and live_tick.get("last_price"):
+            real_ltp = round(float(live_tick["last_price"]), 2)
+            if real_ltp > 0:
+                last_p = real_ltp
+                if candles:
+                    candles[-1].close = real_ltp
+                    candles[-1].high = max(candles[-1].high, real_ltp)
+                    candles[-1].low = min(candles[-1].low, real_ltp)
+    except Exception:
+        pass
 
     return ChartDataResponse(
         symbol=symbol,

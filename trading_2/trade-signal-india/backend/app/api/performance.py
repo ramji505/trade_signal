@@ -4,6 +4,7 @@ router = APIRouter(prefix="/performance", tags=["Performance & Metrics"])
 
 
 @router.get("", summary="Get Strategy Performance Summary")
+@router.get("/summary", summary="Get Strategy Performance Summary Alias")
 async def get_performance_summary():
     """Returns transparent signal performance metrics."""
     return {

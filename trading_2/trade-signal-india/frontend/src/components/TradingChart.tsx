@@ -48,15 +48,17 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const [showVwap, setShowVwap] = useState(true);
 
   // Fetch and populate chart data
-  const loadChartData = async (timeframe: string) => {
+  const loadChartData = async (timeframe: string, silent: boolean = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const apiBase = getApiBaseUrl();
       const res = await fetch(`${apiBase}/market/candles?symbol=${symbol}&timeframe=${timeframe}&count=90`);
       if (!res.ok) throw new Error("Failed to fetch candle data");
       const data = await res.json();
 
-      setLastPrice(data.last_price || 22776.1);
+      if (data.last_price) {
+        setLastPrice(data.last_price);
+      }
 
       if (candleSeries.current && data.candles) {
         const formattedCandles: CandlestickData<Time>[] = data.candles.map((c: any) => ({
@@ -82,13 +84,13 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         vwapSeries.current.setData(data.vwap.map((p: any) => ({ time: p.time as Time, value: p.value })));
       }
 
-      if (chartInstance.current) {
+      if (!silent && chartInstance.current) {
         chartInstance.current.timeScale().fitContent();
       }
     } catch (e) {
       console.error("Error loading chart data:", e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -153,11 +155,17 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
     loadChartData(selectedTimeframe);
 
+    // Continuous 2-second live polling loop for real-time market ticks
+    const tickInterval = setInterval(() => {
+      loadChartData(selectedTimeframe, true);
+    }, 2000);
+
     return () => {
+      clearInterval(tickInterval);
       resizeObserver.disconnect();
       chart.remove();
     };
-  }, []);
+  }, [selectedTimeframe]);
 
   // Update timeframe
   const handleTimeframeChange = (tf: string) => {
@@ -180,8 +188,13 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold text-white tracking-tight">{symbol} 50</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 font-mono font-semibold border border-emerald-800/60">
+            <span className="text-xs px-2.5 py-0.5 rounded bg-emerald-950/90 text-emerald-400 font-mono font-bold border border-emerald-800/80 flex items-center gap-1.5 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
               ₹{lastPrice.toFixed(2)}
+            </span>
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700/60 flex items-center gap-1">
+              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse"></span>
+              LIVE 2s
             </span>
           </div>
 

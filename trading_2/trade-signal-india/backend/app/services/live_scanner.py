@@ -73,7 +73,7 @@ class LiveMarketScanner:
                 df.set_index("timestamp", inplace=True)
                 tf_candles[tf] = df
 
-        if not tf_candles.get("5m") is not None:
+        if "5m" not in tf_candles or tf_candles["5m"].empty:
             return None
 
         # 2. Fetch Heavyweights & India VIX

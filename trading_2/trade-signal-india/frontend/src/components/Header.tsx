@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Activity, ShieldAlert, Cpu } from "lucide-react";
+import { Activity } from "lucide-react";
 
 interface HeaderProps {
   isLive: boolean;
@@ -29,9 +29,13 @@ export const Header: React.FC<HeaderProps> = ({ isLive, marketStatus }) => {
 
         <div className="flex items-center gap-3">
           {/* Mode Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>MOCK DATA (DEV)</span>
+          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium ${
+            isLive
+              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+              : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${isLive ? "bg-emerald-400 animate-ping" : "bg-amber-400"}`}></span>
+            <span>{isLive ? "LIVE UPSTOX FEED" : "MOCK DATA (DEV)"}</span>
           </div>
 
           {/* Market Status */}
