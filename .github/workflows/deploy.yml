@@ -117,6 +117,9 @@ jobs:
             # Save current commit tag for instant rollbacks
             echo "LAST_STABLE_COMMIT=${GITHUB_SHA}" > .last_deployment.env
             
+            # Ensure .env exists if needed
+            touch .env
+            
             # Start / Recreate containers with zero-downtime
             docker compose -f docker-compose.prod.yml up -d
             

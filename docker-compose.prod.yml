@@ -33,13 +33,16 @@ services:
     image: ghcr.io/${GITHUB_USER:-trade-signal-india}/tradesignal-backend:${COMMIT_TAG:-latest}
     container_name: tradesignal_backend
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tradesignal_db}
       - REDIS_URL=redis://redis:6379/0
       - HOST=0.0.0.0
       - PORT=8000
+      - UPSTOX_API_KEY=${UPSTOX_API_KEY:-da6f3f2c-293d-48d6-84c9-d191d8a24d73}
+      - UPSTOX_API_SECRET=${UPSTOX_API_SECRET:-oyhx3h9ms6}
+      - UPSTOX_ACCESS_TOKEN=${UPSTOX_ACCESS_TOKEN:-eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI4N0E0VEgiLCJqdGkiOiI2YWM0ZGFkYzQ1YWI3NjE0ZjQxNWFjNjUiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlzRXh0ZW5kZWQiOnRydWUsImlhdCI6MTc5MTI4NTk4MCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxODIyODYwMDAwfQ._pojEYhQvGauKrAG9MMLE4tW2cuTeMjCduiQaJtpLLw}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-8809800964:AAEiUp7Ks34mNafYCl4UZjd7Dm6btovNxmE}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-7444325646}
     ports:
       - "8000:8000"
     depends_on:
