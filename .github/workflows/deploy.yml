@@ -67,7 +67,7 @@ jobs:
     if: ${{ vars.SKIP_DEPLOY != 'true' }}
 
     steps:
-      - name: Checkout Source Code for Compose Template
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
       - name: Execute Remote SSH Deployment on EC2
@@ -84,7 +84,7 @@ jobs:
             echo "🚀 Starting Deployment on EC2 for Commit: ${GITHUB_SHA}"
             echo "========================================================"
             
-            # 1. Navigate to Project Directory
+            # 1. Ensure Project Directory Exists
             mkdir -p ~/trade-signal-india_v2_upgrade
             cd ~/trade-signal-india_v2_upgrade
             
@@ -100,18 +100,84 @@ jobs:
             echo "📦 Pulling Frontend: ${{ env.FRONTEND_IMAGE }}:${GITHUB_SHA}"
             docker pull ${{ env.FRONTEND_IMAGE }}:${GITHUB_SHA}
             
-            # 4. Set Environment Variables for Production Compose
+            # 4. Generate Production Compose file on EC2 dynamically
+            cat << 'EOF' > docker-compose.prod.yml
+            version: '3.8'
+
+            services:
+              postgres:
+                image: postgres:16-alpine
+                container_name: tradesignal_postgres
+                restart: unless-stopped
+                environment:
+                  POSTGRES_USER: ${POSTGRES_USER:-postgres}
+                  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+                  POSTGRES_DB: ${POSTGRES_DB:-tradesignal_db}
+                volumes:
+                  - postgres_data:/var/lib/postgresql/data
+                healthcheck:
+                  test: ["CMD-SHELL", "pg_isready -U postgres"]
+                  interval: 5s
+                  timeout: 5s
+                  retries: 5
+
+              redis:
+                image: redis:7-alpine
+                container_name: tradesignal_redis
+                restart: unless-stopped
+                volumes:
+                  - redis_data:/data
+                healthcheck:
+                  test: ["CMD", "redis-cli", "ping"]
+                  interval: 5s
+                  timeout: 5s
+                  retries: 5
+
+              backend:
+                image: ghcr.io/${GITHUB_USER}/tradesignal-backend:${COMMIT_TAG:-latest}
+                container_name: tradesignal_backend
+                restart: unless-stopped
+                environment:
+                  - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tradesignal_db}
+                  - REDIS_URL=redis://redis:6379/0
+                  - HOST=0.0.0.0
+                  - PORT=8000
+                ports:
+                  - "8000:8000"
+                depends_on:
+                  postgres:
+                    condition: service_healthy
+                  redis:
+                    condition: service_healthy
+
+              frontend:
+                image: ghcr.io/${GITHUB_USER}/tradesignal-frontend:${COMMIT_TAG:-latest}
+                container_name: tradesignal_frontend
+                restart: unless-stopped
+                environment:
+                  - PORT=3000
+                  - HOSTNAME=0.0.0.0
+                ports:
+                  - "3000:3000"
+                depends_on:
+                  - backend
+
+            volumes:
+              postgres_data:
+              redis_data:
+            EOF
+            
+            # 5. Set Environment Variables
             export GITHUB_USER="${GITHUB_ACTOR}"
             export COMMIT_TAG="${GITHUB_SHA}"
             
             # Save current commit tag for instant rollbacks
             echo "LAST_STABLE_COMMIT=${GITHUB_SHA}" > .last_deployment.env
             
-            # 5. Zero-downtime rolling recreation of backend and frontend
-            # (PostgreSQL and Redis volumes remain intact and untouched)
-            docker compose -f docker-compose.prod.yml up -d --no-deps backend frontend
+            # 6. Start / Recreate all services with zero-downtime
+            docker compose -f docker-compose.prod.yml up -d
             
-            # 6. Cleanup old unused image layers to keep EC2 disk light
+            # 7. Cleanup old unused image layers to keep EC2 disk light
             docker image prune -f
             
             echo "========================================================"
