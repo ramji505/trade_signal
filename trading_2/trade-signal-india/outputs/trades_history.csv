@@ -1,0 +1,2 @@
+trade_id,time,direction,spot_entry,spot_sl,spot_target,option_symbol,option_entry,option_sl,option_target,option_exit,score,result,pnl_points,gross_pnl_rs,statutory_costs_rs,net_pnl_rs,bucket,market_regime
+1,2026-10-05 14:40,BUY,26383.4,26287.83,26526.75,NIFTY26350CE,131.71,77.78,212.6,140.11,86,TIMEOUT,14.89,546.16,68.44,477.72,13:30–15:00 (Afternoon Expansion),STRONG_BULLISH

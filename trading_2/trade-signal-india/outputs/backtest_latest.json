@@ -1,0 +1,72 @@
+{
+  "symbol": "NIFTY",
+  "timeframe": "5m",
+  "total_candles_analyzed": 400,
+  "total_trades": 1,
+  "winning_trades": 1,
+  "losing_trades": 0,
+  "win_rate_pct": 100.0,
+  "profit_factor": null,
+  "expectancy_points": 14.89,
+  "max_drawdown_points": 0.0,
+  "gross_profit_points": 14.89,
+  "gross_loss_points": 0,
+  "net_pnl_points": 14.89,
+  "total_gross_pnl_rupees": 546.16,
+  "total_statutory_costs_rupees": 68.44,
+  "total_net_pnl_rupees": 477.72,
+  "score_tier_stats": [
+    {
+      "tier_range": "Score 85\u2013100 (High Conviction)",
+      "total_signals": 1,
+      "winning_trades": 1,
+      "win_rate_pct": 100.0,
+      "net_pnl_rupees": 477.72
+    }
+  ],
+  "time_of_day_stats": [
+    {
+      "bucket": "13:30\u201315:00 (Afternoon Expansion)",
+      "total_trades": 1,
+      "winning_trades": 1,
+      "win_rate_pct": 100.0,
+      "net_pnl_points": 14.89,
+      "net_pnl_rupees": 477.72
+    }
+  ],
+  "regime_stats": [
+    {
+      "regime_name": "STRONG_BULLISH",
+      "total_trades": 1,
+      "winning_trades": 1,
+      "win_rate_pct": 100.0,
+      "net_pnl_rupees": 477.72,
+      "profit_factor": null
+    }
+  ],
+  "sample_size_warning": "Not statistically actionable: fewer than 30 completed trades.",
+  "performance_is_statistically_actionable": false,
+  "trade_log": [
+    {
+      "trade_id": 1,
+      "time": "2026-10-05 14:40",
+      "direction": "BUY",
+      "spot_entry": 26383.4,
+      "spot_sl": 26287.83,
+      "spot_target": 26526.75,
+      "option_symbol": "NIFTY26350CE",
+      "option_entry": 131.71,
+      "option_sl": 77.78,
+      "option_target": 212.6,
+      "option_exit": 140.11,
+      "score": 86,
+      "result": "TIMEOUT",
+      "pnl_points": 14.89,
+      "gross_pnl_rs": 546.16,
+      "statutory_costs_rs": 68.44,
+      "net_pnl_rs": 477.72,
+      "bucket": "13:30\u201315:00 (Afternoon Expansion)",
+      "market_regime": "STRONG_BULLISH"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "total_trades": 1,
+  "winning_trades": 1,
+  "losing_trades": 0,
+  "win_rate_pct": 100.0,
+  "profit_factor": null,
+  "net_pnl_points": 14.89,
+  "net_pnl_rupees": 477.72,
+  "statutory_costs_rupees": 68.44,
+  "expectancy_points": 14.89,
+  "max_drawdown_points": 0.0,
+  "active_circuit_breaker": false,
+  "sample_size_warning": "Not statistically actionable: fewer than 30 completed trades.",
+  "performance_is_statistically_actionable": false
+}

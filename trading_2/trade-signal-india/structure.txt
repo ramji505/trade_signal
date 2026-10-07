@@ -1,0 +1,141 @@
+Folder PATH listing for volume Data
+D:\TRADING_2\TRADE-SIGNAL-INDIA
+|   .env.example
+|   docker-compose.yml
+|   README.md
+|   structure.txt
+|   
++---backend
+|   |   Dockerfile
+|   |   requirements.txt
+|   |   run_export.py
+|   |   
+|   +---app
+|   |   |   main.py
+|   |   |   __init__.py
+|   |   |   
+|   |   +---api
+|   |   |       backtest.py
+|   |   |       health.py
+|   |   |       market.py
+|   |   |       performance.py
+|   |   |       signals.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---backtest
+|   |   |       engine.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---core
+|   |   |       config.py
+|   |   |       logging.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---costs
+|   |   |       statutory_charges.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---data
+|   |   |       base.py
+|   |   |       candle_builder.py
+|   |   |       data_quality.py
+|   |   |       mock_provider.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---database
+|   |   |       models.py
+|   |   |       session.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---evaluation
+|   |   |       signal_evaluator.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---indicators
+|   |   |       technical.py
+|   |   |       volume_analysis.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---ml
+|   |   |       features.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---options
+|   |   |       greeks.py
+|   |   |       oi_walls.py
+|   |   |       option_chain.py
+|   |   |       pcr.py
+|   |   |       strike_selection.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---risk
+|   |   |       circuit_breakers.py
+|   |   |       event_filter.py
+|   |   |       risk_engine.py
+|   |   |       volatility.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---strategy
+|   |   |       candlestick.py
+|   |   |       derivatives.py
+|   |   |       key_levels.py
+|   |   |       market_regime.py
+|   |   |       market_structure.py
+|   |   |       price_action.py
+|   |   |       scoring.py
+|   |   |       signal_engine.py
+|   |   |       __init__.py
+|   |   |       
+|   |   +---telegram
+|   |   |       bot.py
+|   |   |       __init__.py
+|   |   |       
+|   |   \---websocket
+|   |           manager.py
+|   |           __init__.py
+|   |           
+|   \---tests
+|           test_backtest.py
+|           test_circuit_breakers.py
+|           test_costs.py
+|           test_health.py
+|           test_options.py
+|           test_strategy_and_evaluation.py
+|           __init__.py
+|           
++---frontend
+|   |   Dockerfile
+|   |   package.json
+|   |   postcss.config.mjs
+|   |   README.md
+|   |   tailwind.config.ts
+|   |   tsconfig.json
+|   |   
+|   +---public
+|   |       file.svg
+|   |       globe.svg
+|   |       next.svg
+|   |       vercel.svg
+|   |       window.svg
+|   |       
+|   \---src
+|       +---app
+|       |       globals.css
+|       |       layout.tsx
+|       |       page.tsx
+|       |       
+|       +---components
+|       |       BacktestPanel.tsx
+|       |       Header.tsx
+|       |       StatusCard.tsx
+|       |       TradingChart.tsx
+|       |       
+|       \---types
+|               index.ts
+|               
+\---outputs
+        backtest_latest.json
+        evaluations.csv
+        performance.json
+        signals_history.csv
+        trades_history.csv
