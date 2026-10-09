@@ -85,39 +85,63 @@ class UpstoxMarketDataProvider(MarketDataProvider):
     ) -> List[Dict[str, Any]]:
         """
         Fetches true real 1-minute intraday candlesticks from Upstox and resamples them.
+        Stitches multi-day historical data if intraday bar count is insufficient for indicators.
         """
         inst_key = self._get_instrument_key(symbol)
-        url = f"{self.base_url}/historical-candle/intraday/{inst_key}/1minute"
+        url_intra = f"{self.base_url}/historical-candle/intraday/{inst_key}/1minute"
 
         try:
             async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
-                res = await client.get(url, headers=self.headers)
-                res.raise_for_status()
-                candles_raw = res.json().get("data", {}).get("candles", [])
+                res = await client.get(url_intra, headers=self.headers)
+                candles_raw = []
+                if res.status_code == 200:
+                    candles_raw = res.json().get("data", {}).get("candles", [])
 
-                if not candles_raw:
-                    logger.warning(f"No intraday candles returned from Upstox for {symbol}")
+                # If intraday candles are fewer than 150 (early morning or opening bell), fetch past days' candles
+                all_candles = list(candles_raw)
+                if len(candles_raw) < 150:
+                    from datetime import datetime, timedelta
+                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    past_str = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+                    url_hist = f"{self.base_url}/historical-candle/{inst_key}/1minute/{today_str}/{past_str}"
+                    try:
+                        res_hist = await client.get(url_hist, headers=self.headers)
+                        if res_hist.status_code == 200:
+                            hist_data = res_hist.json().get("data", {}).get("candles", [])
+                            if hist_data:
+                                all_candles.extend(hist_data)
+                    except Exception as e_hist:
+                        logger.warning(f"Could not fetch past Upstox historical candles: {e_hist}")
+
+                if not all_candles:
+                    logger.warning(f"No candles returned from Upstox for {symbol}")
                     from app.data.mock_provider import MockNiftyProvider
                     return await MockNiftyProvider(base_price=settings.BASE_NIFTY_SPOT_PRICE).get_historical_candles(symbol, timeframe, count)
 
                 # Format Upstox candles: [timestamp, open, high, low, close, volume, oi]
-                # Upstox returns latest candles first; reverse to chronological order
-                candles_raw = list(reversed(candles_raw))
-                formatted = []
-                for c in candles_raw:
+                candle_dict = {}
+                for c in all_candles:
                     try:
                         ts = pd.to_datetime(c[0])
-                        formatted.append({
-                            "timestamp": ts,
-                            "open": float(c[1]),
-                            "high": float(c[2]),
-                            "low": float(c[3]),
-                            "close": float(c[4]),
-                            "volume": float(c[5]) if c[5] is not None else 1000.0
-                        })
-                    except Exception as e:
+                        if ts.tzinfo is not None:
+                            ts = ts.tz_convert(None)
+                        if ts not in candle_dict:
+                            candle_dict[ts] = {
+                                "timestamp": ts,
+                                "open": float(c[1]),
+                                "high": float(c[2]),
+                                "low": float(c[3]),
+                                "close": float(c[4]),
+                                "volume": float(c[5]) if c[5] is not None else 1000.0
+                            }
+                    except Exception:
                         continue
 
+                if not candle_dict:
+                    from app.data.mock_provider import MockNiftyProvider
+                    return await MockNiftyProvider(base_price=settings.BASE_NIFTY_SPOT_PRICE).get_historical_candles(symbol, timeframe, count)
+
+                formatted = sorted(candle_dict.values(), key=lambda x: x["timestamp"])
                 df_1m = pd.DataFrame(formatted).set_index("timestamp")
                 df_target = CandleBuilder.resample_candles(df_1m, timeframe)
                 df_target = df_target.tail(count)

@@ -50,11 +50,14 @@ class TechnicalIndicators:
     def calculate_vwap(df: pd.DataFrame) -> pd.Series:
         """Intraday Volume Weighted Average Price."""
         typical_price = (df['high'] + df['low'] + df['close']) / 3.0
+        vol = df.get('volume', pd.Series(0, index=df.index)).replace(0, np.nan)
+        if vol.dropna().empty:
+            return typical_price
         pv = typical_price * df['volume']
         cum_pv = pv.cumsum()
         cum_vol = df['volume'].cumsum().replace(0, np.nan)
         vwap = cum_pv / cum_vol
-        return vwap.ffill().bfill()
+        return vwap.ffill().bfill().fillna(typical_price)
 
     @classmethod
     def compute_all(cls, df: pd.DataFrame) -> pd.DataFrame:

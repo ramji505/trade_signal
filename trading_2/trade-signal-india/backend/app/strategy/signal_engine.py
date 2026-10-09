@@ -114,8 +114,8 @@ class SignalEngine:
 
         # 2. Enrich primary 5m candles with indicators
         df_5m = tf_candles.get("5m")
-        if df_5m is None or len(df_5m) < 20:
-            reasons.append("Insufficient 5-minute candle history (< 20 candles)")
+        if df_5m is None or len(df_5m) < 3:
+            reasons.append("Insufficient 5-minute candle history (< 3 candles)")
             return self._build_wait(sig_id, symbol, now, "INSUFFICIENT_DATA", reasons, decision_type="INSUFFICIENT_DATA")
 
         df_5m = TechnicalIndicators.compute_all(df_5m)
