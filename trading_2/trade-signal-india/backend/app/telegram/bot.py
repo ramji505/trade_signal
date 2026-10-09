@@ -7,9 +7,10 @@ class TelegramNotifier:
     """Institutional Telegram bot notification service with anti-spam cooldown and rich F&O formatting."""
 
     def __init__(self, token: Optional[str] = None, chat_id: Optional[str] = None):
-        self.token = token
-        self.chat_id = chat_id
-        self.enabled = bool(token and chat_id)
+        from app.core.config import settings
+        self.token = token or getattr(settings, "TELEGRAM_BOT_TOKEN", "")
+        self.chat_id = chat_id or getattr(settings, "TELEGRAM_CHAT_ID", "")
+        self.enabled = bool(self.token and self.chat_id)
 
     async def send_signal_alert(self, signal_data: Dict[str, Any]) -> bool:
         if not self.enabled:

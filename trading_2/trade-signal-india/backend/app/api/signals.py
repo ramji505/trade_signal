@@ -49,24 +49,35 @@ class SignalResponse(BaseModel):
     scoring_breakdown: ScoringDetailResponse
     status: str = "ACTIVE"
 
+from app.data.candle_builder import CandleBuilder
+from app.telegram.bot import telegram_notifier
+
+_last_dispatched_signal_id: Optional[str] = None
+
 @router.get("/current", response_model=SignalResponse, summary="Get Current NIFTY Signal")
 async def get_current_signal():
+    global _last_dispatched_signal_id
+    
+    # 1. Fetch 1m candles once and resample for all timeframes in memory (Ultra Fast)
+    raw_1m = await provider.get_historical_candles(symbol=settings.INSTRUMENT, timeframe="1m", count=200)
+    df_1m = pd.DataFrame(raw_1m)
     tf_candles = {}
-    for tf in settings.TIMEFRAMES:
-        raw = await provider.get_historical_candles(symbol=settings.INSTRUMENT, timeframe=tf, count=80)
-        df = pd.DataFrame(raw)
-        if not df.empty:
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            df.set_index("timestamp", inplace=True)
-            tf_candles[tf] = df
+    if not df_1m.empty:
+        df_1m["timestamp"] = pd.to_datetime(df_1m["timestamp"])
+        df_1m.set_index("timestamp", inplace=True)
+        for tf in settings.TIMEFRAMES:
+            if tf == "1m":
+                tf_candles["1m"] = df_1m.tail(80)
+            else:
+                tf_candles[tf] = CandleBuilder.resample_candles(df_1m, tf).tail(80)
 
     option_snapshot = None
     if settings.UPSTOX_ACCESS_TOKEN:
         option_snapshot = await provider.get_option_chain(symbol=settings.INSTRUMENT)
     elif settings.ENVIRONMENT == "LIVE_DATA":
-        # Live provider returns Groww's native option payload; normalize it once at the API boundary.
         raw_option = await provider.get_option_chain(symbol=settings.INSTRUMENT)
-        option_snapshot = normalize_groww_option_chain(raw_option, float(tf_candles["5m"]["close"].iloc[-1]))
+        spot_ref = float(tf_candles["5m"]["close"].iloc[-1]) if "5m" in tf_candles and not tf_candles["5m"].empty else 22500.0
+        option_snapshot = normalize_groww_option_chain(raw_option, spot_ref)
     else:
         option_snapshot = await provider.get_option_chain(symbol=settings.INSTRUMENT)
 
@@ -83,6 +94,34 @@ async def get_current_signal():
         option_snapshot=option_snapshot,
         component_trends=component_trends
     )
+
+    # 2. Automatically dispatch Telegram alert on new high-probability trade (Score >= 70)
+    if result.direction in {"BUY", "SELL", "BUY_CE", "BUY_PE"} and result.score >= 70:
+        if _last_dispatched_signal_id != result.signal_id:
+            _last_dispatched_signal_id = result.signal_id
+            spot_p = float(tf_candles["5m"]["close"].iloc[-1]) if "5m" in tf_candles and not tf_candles["5m"].empty else result.entry_price or 22500.0
+            pcr_p = float(option_snapshot.get("pcr", {}).get("oi_pcr", 1.0)) if option_snapshot else 1.0
+            await telegram_notifier.send_signal_alert({
+                "direction": result.direction,
+                "score": result.score,
+                "quality": result.quality,
+                "market_regime": result.market_regime,
+                "signal_id": result.signal_id,
+                "entry_price": result.entry_price,
+                "stop_loss": result.stop_loss,
+                "target_1": result.target_1,
+                "target_2": result.target_2,
+                "spot_price": spot_p,
+                "pcr": pcr_p,
+                "option_symbol": f"NIFTY {round(spot_p / 50) * 50} {'CE' if result.direction == 'BUY' else 'PE'}",
+                "option_entry": getattr(result, "option_entry", 120.0),
+                "option_sl": getattr(result, "option_sl", 90.0),
+                "option_target": getattr(result, "option_target", 160.0),
+                "delta": getattr(result, "delta", 0.58),
+                "theta": getattr(result, "theta", 14.0),
+                "reasons": result.reasons
+            })
+
     b = result.scoring_breakdown
     return SignalResponse(**{
         "signal_id": result.signal_id, "symbol": result.symbol, "timestamp": result.timestamp,

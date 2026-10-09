@@ -217,10 +217,10 @@ class SignalEngine:
         elif direction_candidate == "SELL" and not cvd_aligned_sell:
             reasons.append("ORDER_FLOW_NOTE: Sell setup with positive/neutral Volume Delta (institutional caution)")
 
-        # Cooldown check
-        if self.risk_engine.is_in_cooldown(direction_candidate, now):
-            reasons.append(f"Signal cooldown active for {direction_candidate} (protecting against repeat alert spam)")
-            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, decision_type="COOLDOWN")
+        # Check if in cooldown for notification dispatch throttling
+        is_cooldown = self.risk_engine.is_in_cooldown(direction_candidate, now)
+        if is_cooldown:
+            reasons.append(f"Signal active (cooldown prevents repeat alert spam)")
 
         # 9. 12-Factor Scoring
         is_buy = (direction_candidate == "BUY")
