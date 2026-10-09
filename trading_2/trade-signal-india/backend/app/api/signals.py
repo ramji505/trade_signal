@@ -53,10 +53,11 @@ from app.data.candle_builder import CandleBuilder
 from app.telegram.bot import telegram_notifier
 
 _last_dispatched_signal_id: Optional[str] = None
+_dispatched_signatures: set = set()
 
 @router.get("/current", response_model=SignalResponse, summary="Get Current NIFTY Signal")
 async def get_current_signal():
-    global _last_dispatched_signal_id
+    global _last_dispatched_signal_id, _dispatched_signatures
     
     # 1. Fetch 1m candles once and resample for all timeframes in memory (Ultra Fast)
     raw_1m = await provider.get_historical_candles(symbol=settings.INSTRUMENT, timeframe="1m", count=200)
@@ -95,12 +96,17 @@ async def get_current_signal():
         component_trends=component_trends
     )
 
-    # 2. Automatically dispatch Telegram alert on new high-probability trade (Score >= 70)
-    if result.direction in {"BUY", "SELL", "BUY_CE", "BUY_PE"} and result.score >= 70:
-        if _last_dispatched_signal_id != result.signal_id:
-            _last_dispatched_signal_id = result.signal_id
-            spot_p = float(tf_candles["5m"]["close"].iloc[-1]) if "5m" in tf_candles and not tf_candles["5m"].empty else result.entry_price or 22500.0
+    # 2. Automatically dispatch Telegram alert on verified high-probability trade (Score >= 80)
+    # Strictly dispatches ONCE per trade setup without repeating on refreshes
+    if result.direction in {"BUY", "SELL", "BUY_CE", "BUY_PE"} and result.score >= settings.SIGNAL_SCORE_THRESHOLD:
+        spot_p = float(tf_candles["5m"]["close"].iloc[-1]) if "5m" in tf_candles and not tf_candles["5m"].empty else result.entry_price or 22500.0
+        trade_sig = f"{result.direction}_{round(spot_p / 20) * 20}_{result.timestamp.strftime('%Y%m%d_%H')}"
+        
+        if trade_sig not in _dispatched_signatures and result.signal_id not in _dispatched_signatures:
+            _dispatched_signatures.add(trade_sig)
+            _dispatched_signatures.add(result.signal_id)
             pcr_p = float(option_snapshot.get("pcr", {}).get("oi_pcr", 1.0)) if option_snapshot else 1.0
+            
             await telegram_notifier.send_signal_alert({
                 "direction": result.direction,
                 "score": result.score,
