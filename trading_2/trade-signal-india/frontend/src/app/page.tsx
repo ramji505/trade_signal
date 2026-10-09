@@ -107,7 +107,20 @@ export default function Home() {
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">12-Factor Hierarchical Engine State</p>
               </div>
-              <div className="text-right">
+              <div className="flex items-center gap-2">
+                {currentSignal?.setup_type && currentSignal.setup_type !== "CONSOLIDATION_WAIT" && (
+                  <span className={`text-xs px-2.5 py-1 rounded-md font-bold font-mono border ${
+                    currentSignal.setup_type === "PULLBACK_ACCUMULATION"
+                      ? "bg-purple-950/80 text-purple-300 border-purple-800"
+                      : currentSignal.setup_type === "MOMENTUM_BREAKOUT"
+                      ? "bg-cyan-950/80 text-cyan-300 border-cyan-800"
+                      : currentSignal.setup_type === "TRAP_REVERSAL"
+                      ? "bg-orange-950/80 text-orange-300 border-orange-800"
+                      : "bg-slate-800 text-slate-400 border-slate-700"
+                  }`}>
+                    ⚡ {currentSignal.setup_type.replace(/_/g, " ")}
+                  </span>
+                )}
                 <span className={`text-xs px-3 py-1 rounded-full font-bold font-mono ${
                   currentSignal?.direction === "BUY"
                     ? "bg-emerald-950 text-emerald-400 border border-emerald-800"

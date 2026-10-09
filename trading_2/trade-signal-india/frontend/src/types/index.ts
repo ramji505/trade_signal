@@ -28,6 +28,7 @@ export interface SignalData {
   quality: "NO_TRADE" | "WEAK" | "MODERATE" | "STRONG" | "VERY_STRONG";
   timeframe: string;
   market_regime: string;
+  setup_type?: string;
   timeframe_states?: Record<string, string>;
   status: "CREATED" | "ACTIVE" | "TARGET_HIT" | "STOP_HIT" | "TIMEOUT" | "CANCELLED";
   reason: string | null;

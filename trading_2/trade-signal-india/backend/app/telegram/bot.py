@@ -18,6 +18,7 @@ class TelegramNotifier:
             return False
 
         direction = signal_data.get("direction", "WAIT")
+        setup_type = signal_data.get("setup_type", "PULLBACK_ACCUMULATION")
         score = signal_data.get("score", 0)
         quality = signal_data.get("quality", "NEUTRAL")
         regime = signal_data.get("market_regime", "TRENDING")
@@ -38,8 +39,8 @@ class TelegramNotifier:
         if direction in {"BUY", "SELL", "BUY_CE", "BUY_PE"} and entry > 0:
             message = (
                 f"🇮🇳 <b>TRADESIGNAL INDIA — LIVE NIFTY SETUP</b>\n\n"
-                f"🎯 <b>Direction</b>: <code>{direction}</code> | <b>Score</b>: <code>{score}/100</code> ({quality})\n"
-                f"📊 <b>Market Regime</b>: <code>{regime}</code>\n\n"
+                f"🎯 <b>Direction</b>: <code>{direction}</code> | <b>Setup</b>: <code>{setup_type}</code>\n"
+                f"⭐ <b>Score</b>: <code>{score}/100</code> ({quality}) | <b>Regime</b>: <code>{regime}</code>\n\n"
                 f"📍 <b>Spot Reference</b>:\n"
                 f"  • Entry: ₹{entry:.1f}\n"
                 f"  • Stop Loss: ₹{sl:.1f}\n"

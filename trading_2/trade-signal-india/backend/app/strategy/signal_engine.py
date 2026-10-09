@@ -38,6 +38,7 @@ class MasterSignalResult:
     timeframe_states: Dict[str, str]
     reasons: list[str]
     scoring_breakdown: ScoringBreakdown
+    setup_type: str = "CONSOLIDATION_WAIT"
     # Calibrated Probability & Meta-Label fields
     calibrated_win_prob: float = 0.50
     expected_value_rupees: float = 0.0
@@ -175,26 +176,76 @@ class SignalEngine:
         liquidity_status = option_snapshot.get("liquidity_status", "GOOD") if isinstance(option_snapshot, dict) else "GOOD"
         pcr_val = float(pcr_data.get("oi_pcr", 1.0)) if pcr_data.get("oi_pcr") is not None else 1.0
 
-        # 6. Direction Hypothesis & Order Flow CVD check
+        # 6. Multi-Setup Quantitative Intelligence Layer
         direction_candidate: Optional[Literal["BUY", "SELL"]] = None
+        setup_type = "CONSOLIDATION_WAIT"
+
         cvd_aligned_buy = bool(df_5m.get('cvd_aligned_buy', pd.Series([True])).iloc[-1])
         cvd_aligned_sell = bool(df_5m.get('cvd_aligned_sell', pd.Series([True])).iloc[-1])
 
-        if mtf_state.is_aligned_for_buy and current_price > vwap_val:
+        # Morphology & Rejection wick analysis
+        c_open = float(df_5m['open'].iloc[-1])
+        c_close = float(df_5m['close'].iloc[-1])
+        c_high = float(df_5m['high'].iloc[-1])
+        c_low = float(df_5m['low'].iloc[-1])
+        c_body = abs(c_close - c_open)
+        c_lower_wick = (c_close if c_close <= c_open else c_open) - c_low
+        c_upper_wick = c_high - (c_close if c_close >= c_open else c_open)
+        has_lower_rejection = (c_lower_wick >= c_body * 0.35) or (candle_pattern in {"HAMMER", "BULLISH_ENGULFING", "MARUBOZU"})
+        has_upper_rejection = (c_upper_wick >= c_body * 0.35) or (candle_pattern in {"SHOOTING_STAR", "BEARISH_ENGULFING", "MARUBOZU"})
+
+        dist_vwap = current_price - vwap_val
+        is_bullish_macro = mtf_state.tf_states.get("15m") in {"BULLISH", "STRONG_BULLISH"} or mtf_state.tf_states.get("10m") in {"BULLISH", "STRONG_BULLISH"}
+        is_bearish_macro = mtf_state.tf_states.get("15m") in {"BEARISH", "STRONG_BEARISH"} or mtf_state.tf_states.get("10m") in {"BEARISH", "STRONG_BEARISH"}
+
+        # Setup 1: PULLBACK ACCUMULATION (Catch the dip early near VWAP/EMA in a strong macro trend)
+        near_vwap_support = (-6.0 <= dist_vwap <= 28.0) or (abs(current_price - ema_9) <= 15.0) or (abs(current_price - ema_21) <= 15.0)
+        near_vwap_resistance = (-28.0 <= dist_vwap <= 6.0) or (abs(current_price - ema_9) <= 15.0) or (abs(current_price - ema_21) <= 15.0)
+
+        if is_bullish_macro and near_vwap_support and (has_lower_rejection or current_price >= vwap_val):
             direction_candidate = "BUY"
+            setup_type = "PULLBACK_ACCUMULATION"
+            reasons.append(f"PULLBACK SETUP: Dip accumulation near VWAP/EMA support (Spot ₹{current_price:.2f} vs VWAP ₹{vwap_val:.2f})")
+        elif is_bearish_macro and near_vwap_resistance and (has_upper_rejection or current_price <= vwap_val):
+            direction_candidate = "SELL"
+            setup_type = "PULLBACK_ACCUMULATION"
+            reasons.append(f"PULLBACK SETUP: Rally shorting near VWAP/EMA resistance (Spot ₹{current_price:.2f} vs VWAP ₹{vwap_val:.2f})")
+        # Setup 2: MOMENTUM BREAKOUT (Early 1st-2nd candle breakout with RVOL)
+        elif rvol_val >= 1.25 and vol_expanding:
+            if mtf_state.is_aligned_for_buy and current_price > vwap_val:
+                direction_candidate = "BUY"
+                setup_type = "MOMENTUM_BREAKOUT"
+                reasons.append(f"BREAKOUT SETUP: Volume-backed momentum expansion (RVOL {rvol_val:.2f}x)")
+            elif mtf_state.is_aligned_for_sell and current_price < vwap_val:
+                direction_candidate = "SELL"
+                setup_type = "MOMENTUM_BREAKOUT"
+                reasons.append(f"BREAKOUT SETUP: Volume-backed breakdown expansion (RVOL {rvol_val:.2f}x)")
+        # Setup 3: TRAP REVERSAL (Failed breakout rejection at key level / Call Wall)
+        elif key_levels.distance_to_resistance_pts <= 15.0 and has_upper_rejection and pcr_val < 0.95:
+            direction_candidate = "SELL"
+            setup_type = "TRAP_REVERSAL"
+            reasons.append(f"TRAP REVERSAL: Resistance rejection at Call Wall (₹{key_levels.nearest_resistance:.1f})")
+        elif key_levels.distance_to_support_pts <= 15.0 and has_lower_rejection and pcr_val > 1.15:
+            direction_candidate = "BUY"
+            setup_type = "TRAP_REVERSAL"
+            reasons.append(f"TRAP REVERSAL: Support demand absorption at Put Wall (₹{key_levels.nearest_support:.1f})")
+        elif mtf_state.is_aligned_for_buy and current_price > vwap_val:
+            direction_candidate = "BUY"
+            setup_type = "MOMENTUM_BREAKOUT"
         elif mtf_state.is_aligned_for_sell and current_price < vwap_val:
             direction_candidate = "SELL"
+            setup_type = "MOMENTUM_BREAKOUT"
 
         if direction_candidate is None:
-            reasons.append(f"MTF or VWAP divergence (Regime: {mtf_state.overall_regime}, Price vs VWAP: {'Above' if current_price > vwap_val else 'Below'})")
-            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, decision_type="WAIT")
+            reasons.append(f"Consolidation / Range-bound market (Regime: {mtf_state.overall_regime}, Price vs VWAP: {'Above' if current_price > vwap_val else 'Below'})")
+            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, setup_type="CONSOLIDATION_WAIT", decision_type="WAIT")
 
         # 7. Heavyweight & Sectoral Concordance Check (P0 Enforcement)
         if component_trends:
             concordance = HeavyweightConcordanceEngine.evaluate(component_trends, direction_candidate)
             if concordance.recommendation == "VETO":
                 reasons.append(f"HEAVYWEIGHT_VETO: Divergence in driving stocks (Score: {concordance.concordance_score:.2f}, Lagging: {', '.join(concordance.lagging_stocks)})")
-                return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, decision_type="VETOED_HEAVYWEIGHT")
+                return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, setup_type=setup_type, decision_type="VETOED_HEAVYWEIGHT")
             elif concordance.recommendation == "CAUTION":
                 reasons.append(f"HEAVYWEIGHT_NOTE: Moderate alignment with {', '.join(concordance.leading_stocks)}")
 
@@ -207,9 +258,9 @@ class SignalEngine:
             nearest_resistance_dist=key_levels.distance_to_resistance_pts,
             nearest_support_dist=key_levels.distance_to_support_pts
         )
-        if trap_audit.get("is_trap_likely", False):
+        if trap_audit.get("is_trap_likely", False) and setup_type != "TRAP_REVERSAL":
             reasons.append(f"TRAP_VETO: {trap_audit.get('audit_summary')}")
-            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, decision_type="VETOED_TRAP")
+            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, setup_type=setup_type, decision_type="VETOED_TRAP")
 
         # Order Flow CVD Note
         if direction_candidate == "BUY" and not cvd_aligned_buy:
@@ -253,7 +304,7 @@ class SignalEngine:
             reasons.append(f"Score {breakdown.total_score}/100 is below minimum threshold {self.score_threshold}")
             for k, v in breakdown.details.items():
                 reasons.append(f"{k}: {v}")
-            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, breakdown, decision_type="SCORE_BELOW_THRESHOLD")
+            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, breakdown, setup_type=setup_type, decision_type="SCORE_BELOW_THRESHOLD")
 
         # 10. Empirical Bayesian Probability Calibration & Meta-Labeling (P1 Enforcement)
         prob_calibration = ProbabilityCalibrator.calibrate(
@@ -266,15 +317,43 @@ class SignalEngine:
 
         if prob_calibration.meta_label_verdict == "REJECT":
             reasons.append(f"META_LABEL_VETO: {prob_calibration.rationale}")
-            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, breakdown, decision_type="VETOED_META_LABEL")
+            return self._build_wait(sig_id, symbol, now, mtf_state.overall_regime, reasons, tf_states_str, breakdown, setup_type=setup_type, decision_type="VETOED_META_LABEL")
 
-        # 11. Compute Spot Risk Parameters & Strike Selection
-        risk_params = self.risk_engine.calculate_levels(
-            direction=direction_candidate,
-            current_price=current_price,
-            atr_value=atr_val,
-            volatility_adjustment=vol_state.risk_adjustment_factor
-        )
+        # 11. Compute Precision Spot Risk Parameters & Strike Selection
+        # For Pullback setups: tight dynamic swing Stop Loss (8-14 points) & 1:2.5 to 1:3.5 R:R
+        if setup_type == "PULLBACK_ACCUMULATION":
+            recent_swing_low = float(df_5m['low'].iloc[-3:].min())
+            recent_swing_high = float(df_5m['high'].iloc[-3:].max())
+            if is_buy:
+                raw_sl_dist = max(9.0, min(14.0, (current_price - recent_swing_low) + 2.0))
+                stop_loss = round(current_price - raw_sl_dist, 2)
+                target_1 = round(current_price + (raw_sl_dist * 2.5), 2)
+                target_2 = round(current_price + (raw_sl_dist * 3.8), 2)
+            else:
+                raw_sl_dist = max(9.0, min(14.0, (recent_swing_high - current_price) + 2.0))
+                stop_loss = round(current_price + raw_sl_dist, 2)
+                target_1 = round(current_price - (raw_sl_dist * 2.5), 2)
+                target_2 = round(current_price - (raw_sl_dist * 3.8), 2)
+            
+            from app.risk.risk_engine import RiskParameters
+            risk_params = RiskParameters(
+                entry_price=round(current_price, 2),
+                stop_loss=stop_loss,
+                target_1=target_1,
+                target_2=target_2,
+                risk_points=round(raw_sl_dist, 2),
+                reward_1_points=round(abs(target_1 - current_price), 2),
+                reward_2_points=round(abs(target_2 - current_price), 2),
+                risk_reward_ratio=round(abs(target_1 - current_price) / raw_sl_dist, 2),
+                is_valid_risk=True
+            )
+        else:
+            risk_params = self.risk_engine.calculate_levels(
+                direction=direction_candidate,
+                current_price=current_price,
+                atr_value=atr_val,
+                volatility_adjustment=vol_state.risk_adjustment_factor
+            )
 
         strike_info = select_optimal_strike(
             spot_price=current_price,
@@ -289,7 +368,7 @@ class SignalEngine:
 
         self.risk_engine.register_signal(direction_candidate, now)
 
-        reasons.append(f"High-probability {direction_candidate} setup confirmed (Score {breakdown.total_score}/100)")
+        reasons.append(f"Setup [{setup_type}] confirmed (Score {breakdown.total_score}/100)")
         reasons.append(f"Calibrated Win Prob: {prob_calibration.calibrated_win_prob:.1%} | Net Expectancy: +₹{prob_calibration.expected_value_rupees:.2f}/lot")
         reasons.append(f"Option Strike: {strike_info['symbol']} | Premium Entry ₹{opt_levels['option_entry']:.1f} (SL ₹{opt_levels['option_sl']:.1f} / Target ₹{opt_levels['option_target']:.1f})")
         reasons.append(f"Delta: {strike_info['delta']} | Theta: ₹{strike_info['theta_day']}/day | Spot R:R 1:{risk_params.risk_reward_ratio}")
@@ -329,6 +408,7 @@ class SignalEngine:
             timeframe_states=tf_states_str,
             reasons=reasons,
             scoring_breakdown=breakdown,
+            setup_type=setup_type,
             calibrated_win_prob=prob_calibration.calibrated_win_prob,
             expected_value_rupees=prob_calibration.expected_value_rupees,
             meta_label_verdict=prob_calibration.meta_label_verdict,
@@ -353,6 +433,7 @@ class SignalEngine:
         reasons: list[str],
         tf_states: Optional[Dict[str, str]] = None,
         breakdown: Optional[ScoringBreakdown] = None,
+        setup_type: str = "CONSOLIDATION_WAIT",
         decision_type: str = "WAIT"
     ) -> MasterSignalResult:
         default_breakdown = breakdown or ScoringBreakdown(0, 0, 0, 0, 0, "NO_TRADE", {})
@@ -392,6 +473,7 @@ class SignalEngine:
             timeframe_states=tf_states or {"15m": "NEUTRAL", "10m": "NEUTRAL", "5m": "NEUTRAL", "3m": "NEUTRAL", "1m": "NEUTRAL"},
             reasons=reasons,
             scoring_breakdown=default_breakdown,
+            setup_type=setup_type,
             calibrated_win_prob=0.0,
             expected_value_rupees=0.0,
             meta_label_verdict="REJECT",

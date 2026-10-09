@@ -46,6 +46,7 @@ class SignalResponse(BaseModel):
     market_regime: str
     timeframe_states: Dict[str, str]
     reasons: list[str]
+    setup_type: str = "CONSOLIDATION_WAIT"
     scoring_breakdown: ScoringDetailResponse
     status: str = "ACTIVE"
 
@@ -109,6 +110,7 @@ async def get_current_signal():
             
             await telegram_notifier.send_signal_alert({
                 "direction": result.direction,
+                "setup_type": result.setup_type,
                 "score": result.score,
                 "quality": result.quality,
                 "market_regime": result.market_regime,
@@ -134,7 +136,7 @@ async def get_current_signal():
         "direction": result.direction, "entry_price": result.entry_price, "stop_loss": result.stop_loss,
         "target_1": result.target_1, "target_2": result.target_2, "score": result.score,
         "quality": result.quality, "market_regime": result.market_regime, "timeframe_states": result.timeframe_states,
-        "reasons": result.reasons,
+        "reasons": result.reasons, "setup_type": result.setup_type,
         "scoring_breakdown": ScoringDetailResponse(
             tier1_structure_score=b.tier1_structure_score, tier2_indicator_score=b.tier2_indicator_score,
             tier3_options_score=b.tier3_options_score, tier4_risk_penalty=b.tier4_risk_penalty,

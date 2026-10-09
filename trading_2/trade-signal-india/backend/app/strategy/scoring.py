@@ -59,9 +59,24 @@ class SignalScorer:
             t2 += 10
         if volume_expanding:
             t2 += 10
-        rsi_ok = (direction == "BUY" and 50 <= rsi_value <= 75) or (direction == "SELL" and 25 <= rsi_value <= 50)
-        if rsi_ok:
-            t2 += 10
+        # Optimal entry zones: reward pullback zone (45-68 for buy), penalize chasing overbought (>75)
+        if direction == "BUY":
+            if 48 <= rsi_value <= 68:
+                t2 += 10
+            elif 68 < rsi_value <= 75:
+                t2 += 5
+            elif rsi_value > 75:
+                penalty += 10  # Peak chasing penalty
+                details["peak_chasing_penalty"] = -10
+        else:  # SELL
+            if 32 <= rsi_value <= 52:
+                t2 += 10
+            elif 25 <= rsi_value < 32:
+                t2 += 5
+            elif rsi_value < 25:
+                penalty += 10  # Bottom chasing penalty
+                details["bottom_chasing_penalty"] = -10
+
         candle_ok = (direction == "BUY" and candlestick_pattern in {"HAMMER", "BULLISH_ENGULFING", "MARUBOZU"}) or (direction == "SELL" and candlestick_pattern in {"SHOOTING_STAR", "BEARISH_ENGULFING", "MARUBOZU"})
         if candle_ok:
             # Keep tier total at 30 while still rewarding candle confirmation.
@@ -70,7 +85,7 @@ class SignalScorer:
                 t2 += 5
         details["ema"] = 10 if ema_aligned else 0
         details["volume"] = 10 if volume_expanding else 0
-        details["rsi"] = 10 if rsi_ok else 0
+        details["rsi"] = 10 if ((direction == "BUY" and 48 <= rsi_value <= 68) or (direction == "SELL" and 32 <= rsi_value <= 52)) else 5
 
         # Options: 25 points = sentiment, wall headroom, IV, spread, liquidity.
         if pcr is not None:
